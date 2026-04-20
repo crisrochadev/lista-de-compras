@@ -9,12 +9,11 @@
       v-if="props.icon"
       avatar
     >
-      <q-icon :name="props.icon" />
+      <q-icon :name="props.icon" color="primary"/>
     </q-item-section>
 
     <q-item-section>
-      <q-item-label>{{ props.title }}</q-item-label>
-      <q-item-label caption>{{ props.caption }}</q-item-label>
+      <q-item-label class="text-uppercase">{{ props.title }}</q-item-label>
     </q-item-section>
   </q-item>
 </template>

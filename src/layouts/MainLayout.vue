@@ -1,102 +1,70 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
+  <q-layout view="hHh Lpr lFf">
+    <q-header class="bg-transparent">
       <q-toolbar>
-        <q-btn
-          flat
-          dense
-          round
-          icon="menu"
-          aria-label="Menu"
-          @click="toggleLeftDrawer"
-        />
+        <q-btn v-if="!$q.screen.xs && !$q.screen.sm" flat dense round :icon="leftDrawerOpen ? 'close' : 'menu'" aria-label="Menu" color="primary"
+          @click="toggleLeftDrawer" />
 
-        <q-toolbar-title>
-          Quasar App
+        <q-toolbar-title class="text-primary">
+          Lista de Compras
         </q-toolbar-title>
 
-        <div>Quasar v{{ $q.version }}</div>
+        <div class="text-primary" >
+          <q-toggle v-model="dark" color="primary" icon="dark_mode" checked-icon="light_mode" />
+        </div>
       </q-toolbar>
     </q-header>
 
-    <q-drawer
-      v-model="leftDrawerOpen"
-      show-if-above
-      bordered
-    >
+    <q-drawer v-if="!$q.screen.xs && !$q.screen.sm" v-model="leftDrawerOpen" behavior="desktop" bordered>
       <q-list>
-        <q-item-label
-          header
-        >
-          Essential Links
-        </q-item-label>
-
-        <EssentialLink
-          v-for="link in linksList"
-          :key="link.title"
-          v-bind="link"
-        />
+        <EssentialLink v-for="link in linksList" :key="link.title" v-bind="link" />
       </q-list>
     </q-drawer>
 
-    <q-page-container>
+    <q-page-container style="width:100%;height:calc(100vh - 50px)" >
       <router-view />
     </q-page-container>
+    <q-footer class="bg-transparent">
+      <q-tabs spread class="full-width" align="justify">
+        <q-route-tab :icon="item.icon"  :to="item.link" class="text-primary" color="primary" v-for="item in linksList" :key="item.title"/>
+      </q-tabs>
+    </q-footer>
   </q-layout>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import EssentialLink from 'components/EssentialLink.vue'
+import { useQuasar } from 'quasar'
+
+const $q = useQuasar()
 
 const linksList = [
   {
-    title: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev'
+    title: 'Lista',
+    icon: 'list',
+    link: '/settings'
   },
   {
-    title: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework'
+    title: 'Informações',
+    icon: 'info',
+    link: '/info'
   },
   {
-    title: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev'
-  },
-  {
-    title: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev'
-  },
-  {
-    title: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev'
-  },
-  {
-    title: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev'
-  },
-  {
-    title: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev'
+    title: 'Configurações',
+    icon: 'settings',
+    link: '/settings'
   }
 ]
 
 const leftDrawerOpen = ref(false)
-
-function toggleLeftDrawer () {
+const dark = computed({
+  get: () => $q.dark.isActive,
+  set: (val) => {
+    $q.dark.set(val)
+  }
+})
+function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
 }
 </script>
