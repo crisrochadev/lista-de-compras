@@ -6,7 +6,10 @@
           @click="toggleLeftDrawer" />
 
         <q-toolbar-title class="text-primary">
-          Lista de Compras
+          <div class="row items-center no-wrap q-gutter-xs">
+            <img src="~assets/logo.png" style="height:32px;width:32px;object-fit:contain;" alt="logo" />
+            <span>Lista de Compras</span>
+          </div>
         </q-toolbar-title>
 
         <div class="text-primary" >
