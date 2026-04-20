@@ -142,6 +142,12 @@ onMounted(() => {
     !!window.navigator.standalone
 
   if (!isInstalled.value) {
+    // Event may have already fired before this page mounted — check global capture
+    if (window.__pwaPrompt) {
+      deferredPrompt.value = window.__pwaPrompt
+      isInstallable.value = true
+    }
+    // Also listen for future events
     window.addEventListener('beforeinstallprompt', handleInstallPrompt)
   }
 })
@@ -152,6 +158,7 @@ onUnmounted(() => {
 
 function handleInstallPrompt(e) {
   e.preventDefault()
+  window.__pwaPrompt = e
   deferredPrompt.value = e
   isInstallable.value = true
 }
@@ -165,6 +172,7 @@ async function installApp() {
     isInstallable.value = false
   }
   deferredPrompt.value = null
+  window.__pwaPrompt = null
 }
 
 function applyColor(color) {
