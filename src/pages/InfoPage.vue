@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-md">
+  <q-page class="q-pa-md q-pb-xl">
     <!-- Developer Card -->
     <q-card flat bordered class="q-mb-lg rounded-borders">
       <q-card-section class="row items-center q-pb-sm">
@@ -43,7 +43,7 @@
           Veja como tirar o melhor proveito:
         </p>
 
-        <q-timeline color="primary" layout="comfortable">
+        <q-timeline color="primary" layout="dense">
           <q-timeline-entry
             v-for="step in steps"
             :key="step.title"

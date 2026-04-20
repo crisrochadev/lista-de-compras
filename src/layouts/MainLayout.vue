@@ -24,9 +24,9 @@
     <q-page-container style="width:100%;height:calc(100vh - 50px)" >
       <router-view />
     </q-page-container>
-    <q-footer class="bg-transparent">
+    <q-footer :class="$q.dark.isActive ? 'bg-grey-10 shadow-up-2' : 'bg-white shadow-up-2'">
       <q-tabs spread class="full-width" align="justify">
-        <q-route-tab :icon="item.icon"  :to="item.link" class="text-primary" color="primary" v-for="item in linksList" :key="item.title"/>
+        <q-route-tab :icon="item.icon" :to="item.link" class="text-primary" color="primary" v-for="item in linksList" :key="item.title" />
       </q-tabs>
     </q-footer>
   </q-layout>
