@@ -43,7 +43,7 @@ const linksList = [
   {
     title: 'Lista',
     icon: 'list',
-    link: '/settings'
+    link: '/'
   },
   {
     title: 'Informações',
