@@ -1,22 +1,50 @@
 <template>
-  <q-page class="full-width full-height">
-    <div class="flex items-center justify-between q-px-sm q-pt-xs q-pb-xs" style="height:32px">
-      <span class="text-caption text-grey-6">{{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
-      <div class="row no-wrap items-center q-gutter-xs">
-        <q-btn flat dense round icon="create_new_folder" color="primary" @click="addCategory">
-          <q-tooltip>Adicionar categoria</q-tooltip>
-        </q-btn>
-        <q-btn flat dense round icon="inventory_2" color="info" @click="showArchived = true">
-          <q-badge v-if="archiveList.length" color="info" floating>{{ archiveList.length }}</q-badge>
-          <q-tooltip>Itens arquivados</q-tooltip>
-        </q-btn>
+  <q-page class="full-width full-height column">
+    <div class="list-toolbar q-pa-sm">
+      <div class="row items-center q-col-gutter-xs">
+        <div class="col-auto">
+          <span class="text-caption text-grey-6">{{ visibleItems.length }} de {{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
+        </div>
+        <div class="col">
+          <q-input
+            v-model="searchTerm"
+            dense
+            outlined
+            clearable
+            debounce="150"
+            placeholder="Buscar itens"
+            class="search-input"
+          >
+            <template #prepend>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+        </div>
+        <div class="col-auto row no-wrap items-center q-gutter-xs">
+          <q-btn-toggle
+            v-model="checkedFilter"
+            dense
+            unelevated
+            toggle-color="primary"
+            color="grey-3"
+            text-color="grey-8"
+            :options="checkedFilterOptions"
+          />
+          <q-btn flat dense round icon="create_new_folder" color="primary" @click="addCategory">
+            <q-tooltip>Adicionar categoria</q-tooltip>
+          </q-btn>
+          <q-btn flat dense round icon="inventory_2" color="info" @click="showArchived = true">
+            <q-badge v-if="archiveList.length" color="info" floating>{{ archiveList.length }}</q-badge>
+            <q-tooltip>Itens arquivados</q-tooltip>
+          </q-btn>
+        </div>
       </div>
     </div>
 
-    <q-scroll-area class="full-width" style="height:calc(100% - 92px)" ref="scroll">
+    <q-scroll-area class="col full-width" ref="scroll">
       <div class="q-px-sm q-pb-sm">
         <q-card
-          v-for="(category, categoryIndex) in categories"
+          v-for="category in categories"
           :key="category.id"
           class="category-card q-mb-sm"
           :class="{ 'dragging-card': dragState?.type === 'category' && dragState.categoryId === category.id }"
@@ -41,6 +69,16 @@
               :rules="[val => !!val || 'Informe a categoria']"
             />
             <q-btn
+              flat
+              dense
+              round
+              icon="add"
+              color="primary"
+              @click="addItem(category.id)"
+            >
+              <q-tooltip>Adicionar item no topo</q-tooltip>
+            </q-btn>
+            <q-btn
               v-if="categories.length > 1"
               flat
               dense
@@ -59,11 +97,19 @@
               class="empty-category text-caption text-grey-5 text-center q-pa-md"
               :data-category-id="category.id"
             >
-              Arraste itens para esta categoria
+              Toque no + da categoria para adicionar itens ou arraste itens para cá
             </div>
 
             <div
-              v-for="(item, itemIndex) in category.items"
+              v-else-if="filteredCategoryItems(category).length === 0"
+              class="empty-category text-caption text-grey-5 text-center q-pa-md"
+              :data-category-id="category.id"
+            >
+              Nenhum item encontrado nesta categoria
+            </div>
+
+            <div
+              v-for="item in filteredCategoryItems(category)"
               :key="item.id"
               class="item-row q-mb-xs"
               :class="{ 'dragging-item': dragState?.type === 'item' && dragState.itemId === item.id }"
@@ -82,7 +128,7 @@
               >
                 <q-menu touch-position context-menu>
                   <q-list>
-                    <q-item clickable dense @click="deleteItem(item, categoryIndex, itemIndex)">
+                    <q-item clickable dense @click="deleteItem(item)">
                       <q-item-section side>
                         <q-icon color="negative" name="delete" />
                       </q-item-section>
@@ -104,7 +150,7 @@
                 <template #append>
                   <div class="flex flex-center" style="width:80px;">
                     <q-btn @click="changeItem(item, 'sub')" icon="keyboard_arrow_left" dense color="primary" flat size="sm" />
-                    <input @keyup.enter="addItem" v-model="item.qtd" mask="#" inputmode="numeric" class="inputQtd" />
+                    <input @keyup.enter="addItem(category.id)" v-model="item.qtd" mask="#" inputmode="numeric" class="inputQtd" />
                     <q-btn @click="changeItem(item, 'add')" icon="keyboard_arrow_right" dense color="primary" size="sm" flat />
                   </div>
                 </template>
@@ -127,10 +173,6 @@
         </q-card>
       </div>
     </q-scroll-area>
-
-    <div class="full-width q-px-sm q-pb-sm" style="height:60px">
-      <q-btn @click="addItem" icon="add" label="Adicionar item" outline color="primary" class="full-width" />
-    </div>
 
     <!-- Archived Items Dialog -->
     <q-dialog v-model="showArchived" maximized transition-show="slide-up" transition-hide="slide-down">
@@ -197,14 +239,22 @@ const q = useQuasar()
 const error = ref(null)
 const currentItem = ref({ id: null, title: null, qtd: 1, added: false })
 const dragState = ref(null)
+const searchTerm = ref('')
+const checkedFilter = ref('all')
+const checkedFilterOptions = [
+  { label: 'Todos', value: 'all' },
+  { label: 'Checados', value: 'checked' },
+  { label: 'A fazer', value: 'unchecked' }
+]
 
 const legacyList = useStorage('list', defaultItems)
-const categories = useStorage('categories', [
-  { id: createId(), title: 'Mercado', items: legacyList.value.length ? legacyList.value : defaultItems }
-])
+const categories = useStorage('categories', [])
 const archiveList = useStorage('archiveList', [])
 
+normalizeStoredCategories()
+
 const list = computed(() => categories.value.flatMap(category => category.items))
+const visibleItems = computed(() => list.value.filter(itemMatchesFilters))
 const sortedArchiveList = computed(() =>
   [...archiveList.value].sort((a, b) => new Date(b.archivedAt) - new Date(a.archivedAt))
 )
@@ -217,18 +267,24 @@ function setItemRef(id, el) {
   if (el) listRefs.value[id] = el
 }
 
-async function addItem() {
+async function addItem(categoryId) {
   const empty = findEmptyItem()
 
   if (empty) {
+    searchTerm.value = ''
+    checkedFilter.value = 'all'
     await focusItem(empty.item.id)
     return
   }
 
-  const targetCategory = categories.value.at(-1) || createCategory('Mercado')
+  const targetCategory = findCategory(categoryId) || getLastCategory() || createCategory('Mercado')
   const newItem = { ...currentItem.value, id: createId() }
-  targetCategory.items.push(newItem)
+  targetCategory.items.unshift(newItem)
+  searchTerm.value = ''
+  checkedFilter.value = 'all'
 
+async function addCategory() {
+  const category = createCategory(`Categoria ${categories.value.length + 1}`)
   await nextTick()
   await focusItem(newItem.id)
   currentItem.value = { id: null, title: null, qtd: 1, added: false }
@@ -245,9 +301,36 @@ function createId() {
 }
 
 function createCategory(title) {
-  const category = { id: createId(), title, items: [] }
+  const category = createCategoryData(title)
   categories.value.push(category)
   return category
+}
+
+function createCategoryData(title, items = []) {
+  return { id: createId(), title, items }
+}
+
+function findCategory(categoryId) {
+  return categories.value.find(category => category.id === categoryId)
+}
+
+function getLastCategory() {
+  return categories.value[categories.value.length - 1]
+}
+
+function normalizeStoredCategories() {
+  const fallbackItems = Array.isArray(legacyList.value) && legacyList.value.length ? legacyList.value : defaultItems
+
+  if (!Array.isArray(categories.value) || categories.value.length === 0) {
+    categories.value = [createCategoryData('Mercado', fallbackItems)]
+    return
+  }
+
+  categories.value = categories.value.map((category, index) => ({
+    id: category?.id || createId(),
+    title: category?.title || `Categoria ${index + 1}`,
+    items: Array.isArray(category?.items) ? category.items : []
+  }))
 }
 
 function findEmptyItem() {
@@ -256,6 +339,20 @@ function findEmptyItem() {
     if (item) return { category, item }
   }
   return null
+}
+
+function itemMatchesFilters(item) {
+  const normalizedSearch = searchTerm.value?.trim().toLowerCase()
+  const matchesSearch = !normalizedSearch || item.title?.toLowerCase().includes(normalizedSearch)
+  const matchesChecked = checkedFilter.value === 'all' ||
+    (checkedFilter.value === 'checked' && item.added) ||
+    (checkedFilter.value === 'unchecked' && !item.added)
+
+  return matchesSearch && matchesChecked
+}
+
+function filteredCategoryItems(category) {
+  return category.items.filter(itemMatchesFilters)
 }
 
 async function focusItem(itemId) {
@@ -273,7 +370,7 @@ function changeItem(item, type) {
   if (type === 'sub' && item.qtd > 1) item.qtd--
 }
 
-function deleteItem(item, categoryIndex, itemIndex) {
+function deleteItem(item) {
   error.value = item.id
   q.dialog({
     title: 'Atenção',
@@ -282,7 +379,8 @@ function deleteItem(item, categoryIndex, itemIndex) {
     ok: { color: 'negative', label: 'Excluir' },
     cancel: { outline: true, label: 'Cancelar', color: 'grey-8' }
   }).onOk(() => {
-    categories.value[categoryIndex].items.splice(itemIndex, 1)
+    const location = findItemLocation(item.id)
+    if (location) location.category.items.splice(location.itemIndex, 1)
     error.value = null
   }).onDismiss(() => { error.value = null })
 }
