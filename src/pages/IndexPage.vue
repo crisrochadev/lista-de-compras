@@ -1,64 +1,178 @@
 <template>
-  <q-page class="full-width full-height">
-    <div class="flex items-center justify-between q-px-sm q-pt-xs q-pb-xs" style="height:32px">
-      <span class="text-caption text-grey-6">{{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
-      <q-btn flat dense round icon="inventory_2" color="info" @click="showArchived = true">
-        <q-badge v-if="archiveList.length" color="info" floating>{{ archiveList.length }}</q-badge>
-        <q-tooltip>Itens arquivados</q-tooltip>
-      </q-btn>
+  <q-page class="full-width full-height column">
+    <div class="list-toolbar q-pa-sm">
+      <div class="row items-center q-col-gutter-xs">
+        <div class="col-auto">
+          <span class="text-caption text-grey-6">{{ visibleItems.length }} de {{ list.length }} {{ list.length === 1 ? 'item' : 'itens' }}</span>
+        </div>
+        <div class="col">
+          <q-input
+            v-model="searchTerm"
+            dense
+            outlined
+            clearable
+            debounce="150"
+            placeholder="Buscar itens"
+            class="search-input"
+          >
+            <template #prepend>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+        </div>
+        <div class="col-auto row no-wrap items-center q-gutter-xs">
+          <q-btn-toggle
+            v-model="checkedFilter"
+            dense
+            unelevated
+            toggle-color="primary"
+            color="grey-3"
+            text-color="grey-8"
+            :options="checkedFilterOptions"
+          />
+          <q-btn flat dense round icon="create_new_folder" color="primary" @click="addCategory">
+            <q-tooltip>Adicionar categoria</q-tooltip>
+          </q-btn>
+          <q-btn flat dense round icon="inventory_2" color="info" @click="showArchived = true">
+            <q-badge v-if="archiveList.length" color="info" floating>{{ archiveList.length }}</q-badge>
+            <q-tooltip>Itens arquivados</q-tooltip>
+          </q-btn>
+        </div>
+      </div>
     </div>
 
-    <q-scroll-area class="full-width" style="height:calc(100% - 92px)" ref="scroll">
-      <div style="height:50px;margin:5px 10px" v-for="(item, i) in list" :key="item.id">
-        <q-input
-          :ref="el => listRefs[i] = el"
-          :for="item.id.toString()"
-          v-model="item.title"
-          outlined
-          dense
-          :rules="[val => !!val || 'Não deixe a descrição vazia']"
-          :bg-color="`${error === item.id ? 'red-4' : 'transparent'}`"
-          :input-style="{ padding: '10px', textDecoration: item.added ? 'line-through' : '' }"
+    <q-scroll-area class="col full-width" ref="scroll">
+      <div class="q-px-sm q-pb-sm">
+        <q-card
+          v-for="category in categories"
+          :key="category.id"
+          class="category-card q-mb-sm"
+          :class="{ 'dragging-card': dragState?.type === 'category' && dragState.categoryId === category.id }"
+          :data-category-id="category.id"
         >
-          <q-menu touch-position context-menu>
-            <q-list>
-              <q-item clickable dense @click="deleteItem(item, i)">
-                <q-item-section side>
-                  <q-icon color="negative" name="delete" />
-                </q-item-section>
-                <q-item-section class="text-uppercase text-xs text-negative">
-                  Excluir Item
-                </q-item-section>
-              </q-item>
-              <q-item clickable dense @click="archiveItem(item)">
-                <q-item-section side>
-                  <q-icon color="info" name="archive" />
-                </q-item-section>
-                <q-item-section class="text-uppercase text-xs text-info">
-                  Arquivar Item
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-menu>
+          <q-card-section class="category-header row items-center no-wrap q-pa-sm">
+            <q-icon
+              name="drag_indicator"
+              size="sm"
+              color="grey-7"
+              class="drag-handle q-mr-xs"
+              @pointerdown="startCategoryDrag($event, category.id)"
+            />
+            <q-input
+              :ref="el => categoryRefs[category.id] = el"
+              v-model="category.title"
+              borderless
+              dense
+              class="category-title col"
+              input-class="text-subtitle1 text-weight-bold"
+              placeholder="Nome da categoria"
+              :rules="[val => !!val || 'Informe a categoria']"
+            />
+            <q-btn
+              flat
+              dense
+              round
+              icon="add"
+              color="primary"
+              @click="addItem(category.id)"
+            >
+              <q-tooltip>Adicionar item no topo</q-tooltip>
+            </q-btn>
+            <q-btn
+              v-if="categories.length > 1"
+              flat
+              dense
+              round
+              icon="delete"
+              color="negative"
+              @click="deleteCategory(category)"
+            >
+              <q-tooltip>Excluir categoria</q-tooltip>
+            </q-btn>
+          </q-card-section>
 
-          <template #append>
-            <div class="flex flex-center" style="width:80px;">
-              <q-btn @click="changeItem(item, 'sub')" icon="keyboard_arrow_left" dense color="primary" flat size="sm" />
-              <input @keyup.enter="addItem" v-model="item.qtd" mask="#" inputmode="numeric" class="inputQtd" />
-              <q-btn @click="changeItem(item, 'add')" icon="keyboard_arrow_right" dense color="primary" size="sm" flat />
+          <q-card-section class="q-pa-sm q-pt-none">
+            <div
+              v-if="category.items.length === 0"
+              class="empty-category text-caption text-grey-5 text-center q-pa-md"
+              :data-category-id="category.id"
+            >
+              Toque no + da categoria para adicionar itens ou arraste itens para cá
             </div>
-          </template>
 
-          <template #prepend>
-            <q-checkbox color="primary" unelevated dense size="lg" v-model="item.added" />
-          </template>
-        </q-input>
+            <div
+              v-else-if="filteredCategoryItems(category).length === 0"
+              class="empty-category text-caption text-grey-5 text-center q-pa-md"
+              :data-category-id="category.id"
+            >
+              Nenhum item encontrado nesta categoria
+            </div>
+
+            <div
+              v-for="item in filteredCategoryItems(category)"
+              :key="item.id"
+              class="item-row q-mb-xs"
+              :class="{ 'dragging-item': dragState?.type === 'item' && dragState.itemId === item.id }"
+              :data-category-id="category.id"
+              :data-item-id="item.id"
+            >
+              <q-input
+                :ref="el => setItemRef(item.id, el)"
+                :for="item.id.toString()"
+                v-model="item.title"
+                outlined
+                dense
+                :rules="[val => !!val || 'Não deixe a descrição vazia']"
+                :bg-color="`${error === item.id ? 'red-4' : 'transparent'}`"
+                :input-style="{ padding: '10px', textDecoration: item.added ? 'line-through' : '' }"
+              >
+                <q-menu touch-position context-menu>
+                  <q-list>
+                    <q-item clickable dense @click="deleteItem(item)">
+                      <q-item-section side>
+                        <q-icon color="negative" name="delete" />
+                      </q-item-section>
+                      <q-item-section class="text-uppercase text-xs text-negative">
+                        Excluir Item
+                      </q-item-section>
+                    </q-item>
+                    <q-item clickable dense @click="archiveItem(item)">
+                      <q-item-section side>
+                        <q-icon color="info" name="archive" />
+                      </q-item-section>
+                      <q-item-section class="text-uppercase text-xs text-info">
+                        Arquivar Item
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+
+                <template #append>
+                  <div class="flex flex-center" style="width:80px;">
+                    <q-btn @click="changeItem(item, 'sub')" icon="keyboard_arrow_left" dense color="primary" flat size="sm" />
+                    <input @keyup.enter="addItem(category.id)" v-model="item.qtd" mask="#" inputmode="numeric" class="inputQtd" />
+                    <q-btn @click="changeItem(item, 'add')" icon="keyboard_arrow_right" dense color="primary" size="sm" flat />
+                  </div>
+                </template>
+
+                <template #prepend>
+                  <div class="row no-wrap items-center">
+                    <q-icon
+                      name="drag_indicator"
+                      size="sm"
+                      color="grey-7"
+                      class="drag-handle item-drag-handle q-mr-xs"
+                      @pointerdown="startItemDrag($event, category.id, item.id)"
+                    />
+                    <q-checkbox color="primary" unelevated dense size="lg" v-model="item.added" />
+                  </div>
+                </template>
+              </q-input>
+            </div>
+          </q-card-section>
+        </q-card>
       </div>
     </q-scroll-area>
-
-    <div class="full-width q-px-sm q-pb-sm" style="height:60px">
-      <q-btn @click="addItem" icon="add" label="Adicionar item" outline color="primary" class="full-width" />
-    </div>
 
     <!-- Archived Items Dialog -->
     <q-dialog v-model="showArchived" maximized transition-show="slide-up" transition-hide="slide-down">
@@ -86,7 +200,7 @@
                   {{ item.title }}
                 </q-item-label>
                 <q-item-label caption>
-                  Qtd: {{ item.qtd }} &bull; {{ formatDate(item.archivedAt) }}
+                  Qtd: {{ item.qtd }} &bull; {{ item.categoryTitle || 'Sem categoria' }} &bull; {{ formatDate(item.archivedAt) }}
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
@@ -110,21 +224,37 @@
 <script setup>
 import { useStorage } from '@vueuse/core'
 import { useQuasar } from 'quasar'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import moment from 'moment'
+
+const defaultItems = [
+  { id: 1, title: 'Açucar 5kg', qtd: 3, added: false }
+]
 
 const showArchived = ref(false)
 const scroll = ref(null)
-const listRefs = ref([])
+const listRefs = ref({})
+const categoryRefs = ref({})
 const q = useQuasar()
 const error = ref(null)
 const currentItem = ref({ id: null, title: null, qtd: 1, added: false })
+const dragState = ref(null)
+const searchTerm = ref('')
+const checkedFilter = ref('all')
+const checkedFilterOptions = [
+  { label: 'Todos', value: 'all' },
+  { label: 'Checados', value: 'checked' },
+  { label: 'A fazer', value: 'unchecked' }
+]
 
-const list = useStorage('list', [
-  { id: 1, title: 'Açucar 5kg', qtd: 3, added: false }
-])
+const legacyList = useStorage('list', defaultItems)
+const categories = useStorage('categories', [])
 const archiveList = useStorage('archiveList', [])
 
+normalizeStoredCategories()
+
+const list = computed(() => categories.value.flatMap(category => category.items))
+const visibleItems = computed(() => list.value.filter(itemMatchesFilters))
 const sortedArchiveList = computed(() =>
   [...archiveList.value].sort((a, b) => new Date(b.archivedAt) - new Date(a.archivedAt))
 )
@@ -133,31 +263,104 @@ function formatDate(dateStr) {
   return moment(dateStr).format('DD/MM/YYYY [às] HH:mm')
 }
 
-async function addItem() {
-  const indexEmpty = list.value.findIndex(item => !item.title || !item.title.trim())
+function setItemRef(id, el) {
+  if (el) listRefs.value[id] = el
+}
 
-  if (indexEmpty !== -1) {
-    await nextTick()
-    const el = listRefs.value[indexEmpty]?.$el
-    listRefs.value[indexEmpty]?.focus()
-    if (el && scroll.value) {
-      scroll.value.setScrollPosition('vertical', el.offsetTop, 300)
-    }
-    listRefs.value[indexEmpty]?.focus?.()
+async function addItem(categoryId) {
+  const empty = findEmptyItem()
+
+  if (empty) {
+    searchTerm.value = ''
+    checkedFilter.value = 'all'
+    await focusItem(empty.item.id)
     return
   }
 
-  currentItem.value.id = Date.now()
-  list.value.push({ ...currentItem.value })
+  const targetCategory = findCategory(categoryId) || getLastCategory() || createCategory('Mercado')
+  const newItem = { ...currentItem.value, id: createId() }
+  targetCategory.items.unshift(newItem)
+  searchTerm.value = ''
+  checkedFilter.value = 'all'
 
   await nextTick()
+  await focusItem(newItem.id)
+  currentItem.value = { id: null, title: null, qtd: 1, added: false }
+}
 
-  const el = listRefs.value[listRefs.value.length - 1]?.$el
+async function addCategory() {
+  const category = createCategory(`Categoria ${categories.value.length + 1}`)
+  await nextTick()
+  categoryRefs.value[category.id]?.focus?.()
+}
+
+function createId() {
+  return Date.now() + Math.floor(Math.random() * 1000)
+}
+
+function createCategory(title) {
+  const category = createCategoryData(title)
+  categories.value.push(category)
+  return category
+}
+
+function createCategoryData(title, items = []) {
+  return { id: createId(), title, items }
+}
+
+function findCategory(categoryId) {
+  return categories.value.find(category => category.id === categoryId)
+}
+
+function getLastCategory() {
+  return categories.value[categories.value.length - 1]
+}
+
+function normalizeStoredCategories() {
+  const fallbackItems = Array.isArray(legacyList.value) && legacyList.value.length ? legacyList.value : defaultItems
+
+  if (!Array.isArray(categories.value) || categories.value.length === 0) {
+    categories.value = [createCategoryData('Mercado', fallbackItems)]
+    return
+  }
+
+  categories.value = categories.value.map((category, index) => ({
+    id: category?.id || createId(),
+    title: category?.title || `Categoria ${index + 1}`,
+    items: Array.isArray(category?.items) ? category.items : []
+  }))
+}
+
+function findEmptyItem() {
+  for (const category of categories.value) {
+    const item = category.items.find(item => !item.title || !item.title.trim())
+    if (item) return { category, item }
+  }
+  return null
+}
+
+function itemMatchesFilters(item) {
+  const normalizedSearch = searchTerm.value?.trim().toLowerCase()
+  const matchesSearch = !normalizedSearch || item.title?.toLowerCase().includes(normalizedSearch)
+  const matchesChecked = checkedFilter.value === 'all' ||
+    (checkedFilter.value === 'checked' && item.added) ||
+    (checkedFilter.value === 'unchecked' && !item.added)
+
+  return matchesSearch && matchesChecked
+}
+
+function filteredCategoryItems(category) {
+  return category.items.filter(itemMatchesFilters)
+}
+
+async function focusItem(itemId) {
+  await nextTick()
+  const itemRef = listRefs.value[itemId]
+  const el = itemRef?.$el
+  itemRef?.focus?.()
   if (el && scroll.value) {
     scroll.value.setScrollPosition('vertical', el.offsetTop, 300)
   }
-  listRefs.value[listRefs.value.length - 1]?.focus?.()
-  currentItem.value = { id: null, title: null, qtd: 1, added: false }
 }
 
 function changeItem(item, type) {
@@ -165,7 +368,7 @@ function changeItem(item, type) {
   if (type === 'sub' && item.qtd > 1) item.qtd--
 }
 
-function deleteItem(item, index) {
+function deleteItem(item) {
   error.value = item.id
   q.dialog({
     title: 'Atenção',
@@ -174,23 +377,42 @@ function deleteItem(item, index) {
     ok: { color: 'negative', label: 'Excluir' },
     cancel: { outline: true, label: 'Cancelar', color: 'grey-8' }
   }).onOk(() => {
-    list.value.splice(index, 1)
+    const location = findItemLocation(item.id)
+    if (location) location.category.items.splice(location.itemIndex, 1)
     error.value = null
   }).onDismiss(() => { error.value = null })
 }
 
+function deleteCategory(category) {
+  q.dialog({
+    title: 'Atenção',
+    message: `Tem certeza que deseja excluir a categoria <b>${category.title}</b> e todos os itens dela?`,
+    html: true,
+    ok: { color: 'negative', label: 'Excluir' },
+    cancel: { outline: true, label: 'Cancelar', color: 'grey-8' }
+  }).onOk(() => {
+    const index = categories.value.findIndex(item => item.id === category.id)
+    if (index !== -1) categories.value.splice(index, 1)
+  })
+}
+
 function archiveItem(item) {
-  const index = list.value.findIndex(i => i.id === item.id)
-  if (index === -1) return
-  archiveList.value.push({ ...item, archivedAt: new Date().toISOString() })
-  list.value.splice(index, 1)
+  const location = findItemLocation(item.id)
+  if (!location) return
+  archiveList.value.push({
+    ...item,
+    categoryTitle: location.category.title,
+    archivedAt: new Date().toISOString()
+  })
+  location.category.items.splice(location.itemIndex, 1)
 }
 
 function unarchiveItem(item) {
   const index = archiveList.value.findIndex(i => i.id === item.id && i.archivedAt === item.archivedAt)
   if (index === -1) return
-  const { archivedAt, ...original } = archiveList.value[index]
-  list.value.push(original)
+  const { archivedAt, categoryTitle, ...original } = archiveList.value[index]
+  const targetCategory = categories.value.find(category => category.title === categoryTitle) || categories.value[0] || createCategory(categoryTitle || 'Mercado')
+  targetCategory.items.push(original)
   archiveList.value.splice(index, 1)
 }
 
@@ -198,11 +420,136 @@ function deleteArchivedItem(item) {
   const index = archiveList.value.findIndex(i => i.id === item.id && i.archivedAt === item.archivedAt)
   if (index !== -1) archiveList.value.splice(index, 1)
 }
+
+function findItemLocation(itemId) {
+  for (const [categoryIndex, category] of categories.value.entries()) {
+    const itemIndex = category.items.findIndex(item => item.id === itemId)
+    if (itemIndex !== -1) return { category, categoryIndex, itemIndex }
+  }
+  return null
+}
+
+function startCategoryDrag(event, categoryId) {
+  startDrag(event, { type: 'category', categoryId })
+}
+
+function startItemDrag(event, categoryId, itemId) {
+  startDrag(event, { type: 'item', categoryId, itemId })
+}
+
+function startDrag(event, state) {
+  event.preventDefault()
+  dragState.value = state
+  window.addEventListener('pointermove', onPointerMove, { passive: false })
+  window.addEventListener('pointerup', stopDrag)
+  window.addEventListener('pointercancel', stopDrag)
+}
+
+function onPointerMove(event) {
+  if (!dragState.value) return
+  event.preventDefault()
+  const target = document.elementFromPoint(event.clientX, event.clientY)
+  if (!target) return
+
+  if (dragState.value.type === 'category') {
+    const categoryElement = target.closest('[data-category-id]')
+    const targetCategoryId = Number(categoryElement?.dataset.categoryId)
+    if (targetCategoryId) moveCategory(dragState.value.categoryId, targetCategoryId)
+    return
+  }
+
+  const itemElement = target.closest('[data-item-id]')
+  if (itemElement) {
+    moveItem(
+      dragState.value.itemId,
+      Number(itemElement.dataset.categoryId),
+      Number(itemElement.dataset.itemId)
+    )
+    return
+  }
+
+  const categoryElement = target.closest('[data-category-id]')
+  const targetCategoryId = Number(categoryElement?.dataset.categoryId)
+  if (targetCategoryId) moveItemToCategoryEnd(dragState.value.itemId, targetCategoryId)
+}
+
+function stopDrag() {
+  dragState.value = null
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', stopDrag)
+  window.removeEventListener('pointercancel', stopDrag)
+}
+
+function moveCategory(sourceId, targetId) {
+  if (sourceId === targetId) return
+  const sourceIndex = categories.value.findIndex(category => category.id === sourceId)
+  const targetIndex = categories.value.findIndex(category => category.id === targetId)
+  if (sourceIndex === -1 || targetIndex === -1) return
+  const [category] = categories.value.splice(sourceIndex, 1)
+  categories.value.splice(targetIndex, 0, category)
+}
+
+function moveItem(itemId, targetCategoryId, targetItemId) {
+  if (itemId === targetItemId) return
+  const location = findItemLocation(itemId)
+  const targetCategory = categories.value.find(category => category.id === targetCategoryId)
+  if (!location || !targetCategory) return
+  const [item] = location.category.items.splice(location.itemIndex, 1)
+  const targetIndex = targetCategory.items.findIndex(item => item.id === targetItemId)
+  targetCategory.items.splice(targetIndex === -1 ? targetCategory.items.length : targetIndex, 0, item)
+}
+
+function moveItemToCategoryEnd(itemId, targetCategoryId) {
+  const location = findItemLocation(itemId)
+  const targetCategory = categories.value.find(category => category.id === targetCategoryId)
+  if (!location || !targetCategory) return
+  if (location.category.id === targetCategory.id && location.itemIndex === targetCategory.items.length - 1) return
+  const [item] = location.category.items.splice(location.itemIndex, 1)
+  targetCategory.items.push(item)
+}
+
+onBeforeUnmount(stopDrag)
 </script>
 
 <style>
 .q-field--outlined .q-field__control {
   padding: 0 0 0 10px !important;
+}
+
+.category-card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.category-header .q-field__control {
+  min-height: 32px;
+}
+
+.category-title input {
+  cursor: text;
+}
+
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.dragging-card,
+.dragging-item {
+  opacity: 0.55;
+}
+
+.item-row:last-child {
+  margin-bottom: 0;
+}
+
+.empty-category {
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
 }
 
 .inputQtd {
