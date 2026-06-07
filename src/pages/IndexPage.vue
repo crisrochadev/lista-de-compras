@@ -282,13 +282,9 @@ async function addItem(categoryId) {
   targetCategory.items.unshift(newItem)
   searchTerm.value = ''
   checkedFilter.value = 'all'
-
-async function addCategory() {
-  const category = createCategory(`Categoria ${categories.value.length + 1}`)
-  await nextTick()
-  await focusItem(newItem.id)
-  currentItem.value = { id: null, title: null, qtd: 1, added: false }
 }
+
+
 
 async function addCategory() {
   const category = createCategory(`Categoria ${categories.value.length + 1}`)
